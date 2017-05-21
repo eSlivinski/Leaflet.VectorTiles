@@ -1,5 +1,7 @@
 import Tile from './tile';
 import Feature from './feature';
+import { VectorTile } from '@mapbox/vector-tile';
+import Pbf from 'pbf';
 
 /**
  * Manages interactive tiles of data
@@ -166,20 +168,31 @@ L.VectorTiles = L.GridLayer.extend({
     // fetch vector tile data for this tile
     const url = L.Util.template(this._url, coords);
     fetch(url)
-      .then(res => res.json())
-      .then((layers) => {
-        for (let i = 0; i < layers.length; i++) {
+      .then(res => res.blob())
+      .then(blob => {
+        const reader = new FileReader();
+        return new Promise((resolve, reject) => {
+          reader.onloadend = () => {
+            resolve(new VectorTile(new Pbf(reader.result)));
+          }
+          reader.readAsArrayBuffer(blob);
+        });
+      })
+      .then(vtTile => {
+        for (const vtLayerName in vtTile.layers) {
           // break out if this tile has already be unloaded
           if (!tile.valid) {
             break;
           }
-          for (let j = 0; j < layers[i].features.features.length; j++) {
+          const vtLayer = vtTile.layers[vtLayerName];
+          for (let j = 0; j < vtLayer.length; j++) {
             // break out if this tile has already be unloaded
             if (!tile.valid) {
               break;
             }
+            const vtFeature = vtLayer.feature(j);
 
-            const geojson = layers[i].features.features[j];
+            const geojson = vtFeature.toGeoJSON(coords.x, coords.y, coords.z);
             const id = this.options.getFeatureId(geojson);
             const layer = this._geojsonToLayer(geojson);
             if (!layer) {

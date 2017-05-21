@@ -21,7 +21,7 @@ function main(geojson) {
 
   L.tileLayer('http://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-  const url = '/{z}/{x}/{y}';
+  const url = '/{z}/{x}/{y}?pbf=true';
 
   const vtLayer = new L.VectorTiles(url, {
     getFeatureId: f => f.properties.name.toLowerCase(),
@@ -41,7 +41,6 @@ function main(geojson) {
       L.latLng({ lat: lat - buf, lng: lng - buf }),
       L.latLng({ lat: lat + buf, lng: lng + buf })
     ).forEach(id => vtLayer.setFeatureStyle(id, { color: 'green' }));
-
   }
 
   document.getElementById('hover-radio').onclick = e => {

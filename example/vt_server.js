@@ -5,7 +5,9 @@ const fs = require('fs');
 const cors = require('cors');
 const rbush = require('rbush');
 const bbox = require('@turf/bbox');
+const vtpbf = require('vt-pbf');
 const express = require('express');
+const geojsonvt = require('geojson-vt');
 const SphericalMercator = require('sphericalmercator');
 const featureCollection = require('@turf/helpers').featureCollection;
 
@@ -19,6 +21,9 @@ const mercator = new SphericalMercator({ size: 256 });
 
 // load features from file
 const geoj = JSON.parse(fs.readFileSync('countries.geo.json'));
+
+// tile index for Vector Tiles
+const tileIndex = geojsonvt(geoj);
 
 const tree = rbush();
 
@@ -40,14 +45,22 @@ app.get('/:z/:x/:y', (req, res) => {
   const x = +req.params.x;
   const y = +req.params.y;
   const z = +req.params.z;
-  const tileBbox = mercator.bbox(x, y, z, false, '4326');
-  const features = tree.search({
-    minX: tileBbox[0],
-    minY: tileBbox[1],
-    maxX: tileBbox[2],
-    maxY: tileBbox[3],
-  }).map(r => r.feature);
-  res.json([{ layer: 'coutries', features: featureCollection(features) }]);
+
+  if (req.query.pbf == 'true') {
+    const tile = tileIndex.getTile(z, x, y);
+    const buff = vtpbf.fromGeojsonVt({ 'countries': tile });
+    res.send(buff);
+  } else {
+    const tileBbox = mercator.bbox(x, y, z, false, '4326');
+    const features = tree.search({
+      minX: tileBbox[0],
+      minY: tileBbox[1],
+      maxX: tileBbox[2],
+      maxY: tileBbox[3],
+    }).map(r => r.feature);
+    res.json([{ layer: 'coutries', features: featureCollection(features) }]);
+  }
+
 });
 
 app.get('/geojson', (req, res) => {
