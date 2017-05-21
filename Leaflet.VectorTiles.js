@@ -11,8 +11,14 @@ import Pbf from 'pbf';
  *
  * @example
  * var vtLayer = new L.VectorTiles('http://mytiles.com/{z}/{x}/{y}.pbf', {
- *   map: map,
- *   debug: true
+ *   debug: true,
+ *   style: {
+ *     property: {
+ *       value: {
+ *         color: 'red'
+ *       }
+ *     }
+ *   }
  * }).addTo(map);
  */
 
@@ -62,12 +68,15 @@ L.VectorTiles = L.GridLayer.extend({
     // mark individual features as on or off the map
     this._featureOnMap = {};
 
+    // mark a tile for destruction in case it is unloaded before it loads
+    this._toDestroy = {};
+
     // mark a tile as loaded
     // this is needed because if a tile is unloaded before its finished loading
     // we need to wait for it to finish loading before we can clean up
     this.on('vt_tileload', (e) => {
       const tileKey = this._tileCoordsToKey(e.coords);
-      if (!this._vectorTiles[tileKey].valid) {
+      if (this._toDestroy[tileKey]) {
         this.destroyTile(e.coords);
       }
     });
@@ -83,17 +92,13 @@ L.VectorTiles = L.GridLayer.extend({
 
       const tileKey = this._tileCoordsToKey(e.coords);
 
-      // TODO: figure out why we're unloading tiles we never loaded
-      if (!(tileKey in this._vectorTiles)) {
-        console.log('unloading tile that was never loaded:', tileKey);
-        return;
-      }
-
-      // if the tile hasn't loaded yet wait until it loads to destroy it
-      if (!this._vectorTiles[tileKey].loaded) {
+      // if the tile hasn't loaded yet, mark it for deletion for when it
+      // is finished loading
+      if (!(tileKey in this._vectorTiles) || !this._vectorTiles[tileKey].loaded) {
         // invalidate the tile so that it is deleted when its done loading
-        this._vectorTiles[tileKey].valid = false;
+        this._toDestroy[tileKey] = true;
       } else {
+        // destroy it immediately
         this.destroyTile(e.coords);
       }
     });
@@ -162,6 +167,11 @@ L.VectorTiles = L.GridLayer.extend({
   _createTile(coords) {
     const tileKey = this._tileCoordsToKey(coords);
 
+    // tile has already been unloaded
+    if (this._toDestroy[tileKey]) {
+      return;
+    }
+
     const tile = new Tile(coords.x, coords.y, coords.z);
     this._vectorTiles[tileKey] = tile;
 
@@ -181,13 +191,13 @@ L.VectorTiles = L.GridLayer.extend({
       .then(vtTile => {
         for (const vtLayerName in vtTile.layers) {
           // break out if this tile has already be unloaded
-          if (!tile.valid) {
+          if (this._toDestroy[tileKey]) {
             break;
           }
           const vtLayer = vtTile.layers[vtLayerName];
           for (let j = 0; j < vtLayer.length; j++) {
             // break out if this tile has already be unloaded
-            if (!tile.valid) {
+            if (this._toDestroy[tileKey]) {
               break;
             }
             const vtFeature = vtLayer.feature(j);
@@ -245,7 +255,7 @@ L.VectorTiles = L.GridLayer.extend({
           }
         }
 
-        if (tile.valid) {
+        if (!this._toDestroy[tileKey]) {
           // called when all features have been added to the tile
           tile.init();
 
@@ -278,6 +288,11 @@ L.VectorTiles = L.GridLayer.extend({
 
     // delete the tile's data
     delete this._vectorTiles[tileKey];
+
+    // remove delete marker
+    if (this._toDestroy[tileKey]) {
+      delete this._toDestroy[tileKey];
+    }
   },
 
   /**

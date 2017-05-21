@@ -23,7 +23,7 @@ function main(geojson) {
 
   const url = '/{z}/{x}/{y}?pbf=true';
 
-  const vtLayer = new L.VectorTiles(url, {
+  const vtLayer = window.vtLayer = new L.VectorTiles(url, {
     getFeatureId: f => f.properties.name.toLowerCase(),
     style: {}
   }).addTo(map);
