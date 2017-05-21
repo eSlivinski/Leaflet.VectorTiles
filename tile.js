@@ -14,8 +14,6 @@ export default class Tile {
     this.z = z;
     this.features = {};
 
-    // is the tile on the map?
-    this.valid = true;
     this.loaded = false;
 
     this.index = rbush();
